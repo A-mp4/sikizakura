@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>ルート表示（飲食店ジャンル選択付き）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 70vh; }
+    #controls { padding: 10px; }
+    label, select {
+      margin-right: 10px;
+      font-size: 16px;
+    }
+    select {
+      padding: 4px 8px;
+    }
+    button {
+      padding: 10px 16px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  
+    /* 👇 これを追加！イベントリストの各項目に余白を追加 */
+    #eventList li {
+      margin-bottom: 30px;
+    }
+  </style>
+  
+</head>
+<body>
+
+    <div id="controls" style="display: flex; align-items: center; gap: 10px;">
+      <label for="foodVisibility" style="white-space: nowrap;">
+        飲食店：
+        <select id="foodVisibility">
+          <option value="show">表示</option>
+          <option value="hide" selected>非表示</option>
+        </select>
+      </label>
+  
+      <label for="categoryFilter" id="genreLabel" style="display:none; white-space: nowrap;">
+        飲食店ジャンル:
+        <select id="categoryFilter">
+          <option value="洋食">洋食</option>
+          <option value="とんかつ">とんかつ</option>
+          <option value="ラーメン">ラーメン</option>
+          <option value="うどん">うどん</option>
+          <option value="手羽先">手羽先</option>
+          <option value="居酒屋">居酒屋</option>
+          <option value="喫茶店">喫茶店</option>
+          <option value="おにぎり">おにぎり</option>
+          <option value="ハンバーガー">ハンバーガー</option>
+          <option value="小籠包">小籠包</option>
+          <option value="ひつまぶし">ひつまぶし</option>
+          <option value="フライドポテト">フライドポテト</option>
+          <option value="から揚げ">から揚げ</option>
+          <option value="味噌カツ">味噌カツ</option>
+          <option value="韓国屋台">韓国屋台</option>
+          <option value="中華">中華</option>
+          <option value="たこ焼き">たこ焼き</option>
+          <option value="五平餅">五平餅</option>
+          <option value="名古屋コーチン">名古屋コーチン</option>
+          <option value="犬山ドッグ">犬山ドッグ</option>
+          <option value="牛串">牛串</option>
+          <option value="肉寿司">肉寿司</option>
+          <option value="スイーツ">スイーツ</option>
+        </select>
+      </label>
+  
+      <!-- 行先一覧用トグルボタン -->
+      
+
+
+
+  
+      <!-- イベント表示セレクトとボタン -->
+      <label for="eventVisibility" style="white-space: nowrap; margin-left: 20px;">
+        イベント：
+        <select id="eventVisibility">
+          <option value="show">表示</option>
+          <option value="hide" selected>非表示</option>
+        </select>
+      </label>
+
+      <button id="toggleEventPanel" style="
+  margin-left: 8px;
+  padding: 6px 12px;
+  background-color: #b82fa1;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+">イベント詳細情報</button>
+
+
+<button id="toggleDestinationPanel" style="
+        margin-left: 20px;
+        padding: 6px 12px;
+        background-color: #2a7ae2;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+      ">行き先一覧</button>
+  
+      <!-- イベント詳細情報ボタン（初期は非表示） -->
+      
+
+  
+    </div>
+  
+    <!-- 行先一覧パネル（右端） -->
+   <!-- 行先一覧パネル（右端） -->
+<div id="destinationPanel" style=" 
+position: fixed;
+top: 0;
+right: -320px; /* 初期は隠れている */
+width: 320px;
+height: 100%;
+background: white;
+border-left: 1px solid #ccc;
+box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+overflow-y: auto;
+padding: 10px;
+transition: right 0.3s ease;
+z-index: 999;
+">
+<h3>行先一覧</h3>
+<ul id="destinationList" style="padding-left: 20px; margin: 0;">
+  <!-- 例として適当な行先 -->
+  <li>名古屋城</li>
+  <li>熱田神宮</li>
+  <li>オアシス21</li>
+  <li>大須商店街</li>
+</ul>
+</div>
+
+  
+    <!-- イベントパネル（右端） -->
+    <div id="eventPanel" style="
+      position: fixed;
+      top: 0;
+      right: -320px; /* 初期は隠れている */
+      width: 320px;
+      height: 100%;
+      background: white;
+      border-left: 1px solid #ccc;
+      box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+      overflow-y: auto;
+      padding: 10px;
+      transition: right 0.3s ease;
+      z-index: 999;
+    ">
+      <h3>イベント一覧</h3>
+      <ul id="eventList" style="padding-left: 20px; margin: 0;"></ul>
+    </div>
+  
+    <script>
+      // 要素取得
+
+      let selectedDestinations = [];  // 行き先一覧のデータを保持する配列
+      const eventVisibilitySelect = document.getElementById('eventVisibility');
+      const toggleEventBtn = document.getElementById('toggleEventPanel');
+      const eventPanel = document.getElementById('eventPanel');
+  
+      const toggleDestinationBtn = document.getElementById('toggleDestinationPanel');
+      const destinationPanel = document.getElementById('destinationPanel');
+  
+      // イベントリストのデータと描画関数
+      
+      function renderEventList() {
+
+        const eventSpots = [
+        { name: "オディロン・ルドン　夢の交叉　―画家として、批評家として―　　[美術展]", url: "https://www.nagoya-info.jp/event/detail/1255/" },
+        { name: "白鳥庭園 秋露祭　　[ギャラリートーク、アートツアー]", url: "https://www.nagoya-info.jp/event/detail/98/" },
+        { name: "企画展「著名な刀工～古刀から新刀まで～」　　[展示]", url: "https://www.nagoya-info.jp/event/detail/1244/" }
+      ];
+  
+        const eventList = document.getElementById('eventList');
+        eventList.innerHTML = ''; // クリア
+  
+        eventSpots.forEach(event => {
+          const li = document.createElement('li');
+          const a = document.createElement('a');
+          a.href = event.url;
+          a.textContent = event.name;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          li.appendChild(a);
+          eventList.appendChild(li);
+        });
+      }
+  
+      // 行先一覧トグルボタンのクリックイベント
+      // 行先一覧トグルボタンのクリックイベント
+toggleDestinationBtn.addEventListener('click', () => {
+  const isDestOpen = destinationPanel.style.right === '0px';
+
+  if (isDestOpen) {
+    // 閉じる
+    destinationPanel.style.right = '-320px';
+  } else {
+    // 開く前にイベントパネル閉じる
+    eventPanel.style.right = '-320px';
+    destinationPanel.style.right = '0px'; // ここでパネルを右から出す
+  }
+});
+
+  
+      // イベント詳細の表示切替セレクト変更時の処理
+      eventVisibilitySelect.addEventListener('change', (e) => {
+        if (e.target.value === 'show') {
+          toggleEventBtn.style.display = 'inline-block';
+        } else {
+          toggleEventBtn.style.display = 'none';
+          closeEventPanel();
+        }
+      });
+  
+      // イベント詳細情報ボタンのクリックイベント
+      toggleEventBtn.addEventListener('click', () => {
+        const isEventOpen = eventPanel.style.right === '0px';
+  
+        if (isEventOpen) {
+          eventPanel.style.right = '-320px';
+        } else {
+          // 行先一覧パネル閉じる
+          destinationPanel.style.right = '-320px';
+          eventPanel.style.right = '0px';
+          renderEventList();
+        }
+      });
+  
+      // イベントパネルを閉じる関数
+      function closeEventPanel() {
+        eventPanel.style.right = '-320px';
+      }
+  
+    </script>
+  
+  </body>
+  
+  
+
+      
+      
+      
+              
+    
+    
+  
+      
+
+
+ 
+        
+        
+        
+
+
+      </select>
+    </label>
+
+    <button id="updateBtn">更新</button>
+  </div>
+
+  <!-- 行き先一覧パネル -->
+
+  
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // アイコン設定（赤＝現在地、緑＝駅）
+    const redIcon = L.icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+      shadowSize: [41, 41]
+    });
+    const stationIcon = L.icon({
+      iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+      shadowSize: [41, 41]
+    });
+
+    const foodIcon = L.icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+  shadowSize: [41, 41]
+});
+
+
+const shikiIcon = L.icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+  shadowSize: [41, 41]
+});
+
+const eventIcon = L.icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-violet.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+  shadowSize: [41, 41]
+});
+
+  const spots = [
+    { name: "「シキザクラ」熱田神宮", lat: 35.12776500157432,   lng: 136.90841903570887 ,category: "シキザクラ", prefecture: "愛知県"},
+    { name: "「シキザクラ」犬山駅", lat: 35.38059731323793,   lng: 136.94567929145734 ,category: "シキザクラ", prefecture: "愛知県"},
+    { name: "「シキザクラ」犬山城", lat: 35.389225991224855, lng:  136.93649363916643 ,category: "シキザクラ", prefecture: "愛知県"},
+    { name: "「シキザクラ」大須観音", lat: 35.16026860499404,  lng:136.89983326064777 ,category: "シキザクラ", prefecture: "愛知県"},
+    { name: "「シキザクラ」大須商店街", lat: 35.1606448420087,  lng: 136.90276190233686  ,category: "シキザクラ", prefecture: "愛知県"},
+    { name: "「シキザクラ」名古屋城", lat: 35.184979548514484,  lng:136.8995649183877  ,category: "シキザクラ", prefecture: "愛知県"},
+    { name: "「シキザクラ」名古屋テレビ塔", lat: 35.17274460341759,  lng:  136.90853042683023 ,category: "シキザクラ", prefecture: "愛知県"},
+    { name: "「シキザクラ」東山動植物園", lat: 35.15681366811172,  lng: 136.98207535973015,category: "シキザクラ", prefecture: "愛知県"},
+    { name: "「シキザクラ」名鉄犬山線", lat: 35.380544604718175, lng:  136.94566896329292 ,category: "シキザクラ", prefecture: "愛知県"}
+  ];
+
+  const stations = [
+       { name: "国府駅", lat: 34.837651602630245, lng:137.32811256748445 },
+    { name: "八幡駅", lat: 34.829160933354544, lng: 137.35220761449636 },
+    { name: "諏訪町駅", lat: 34.823401411202326,  lng: 137.3707225886341 },
+    { name: "稲荷口駅", lat: 34.818547644962294, lng: 137.38721416345334},
+    { name: "豊川稲荷駅", lat: 34.822426223650524, lng: 137.39650415565973} ,
+  { name: "小田渕駅", lat: 34.81455923033158, lng: 137.34581725846888 },
+  { name: "国府駅", lat: 34.837737296653415, lng: 137.3272793431578 },
+  { name: "名電赤坂駅", lat: 34.85911739255532, lng: 137.3112840315493 },
+  { name: "名電長沢駅", lat: 34.87157485251886, lng: 137.28822490512604 },
+  { name: "本宿駅", lat: 34.89279851898171, lng: 137.26020664030185 },
+  { name: "名電山中駅", lat: 34.89958174936259, lng: 137.2425464604365 },
+  { name: "藤川駅", lat: 34.913249133400875, lng: 137.21845279361247 },
+  { name: "美合駅", lat: 34.92393546357745, lng: 137.19644405142026 },
+  { name: "男川駅", lat: 34.937674246945264, lng: 137.18321993672555 },
+  { name: "東岡崎駅", lat: 34.95204894682275, lng: 137.1675868119976 },
+  { name: "岡崎公園前駅", lat: 34.95536883841294, lng: 137.15269679915798 },
+  { name: "矢作橋駅", lat: 34.95536345301406, lng: 137.15267971514035 },
+  { name: "宇頭駅", lat: 34.971381733821296, lng: 137.11822541288672 },
+  { name: "新安城駅", lat: 34.98701046196139, lng: 137.0851862102096 },
+  { name: "知立駅", lat: 35.00586728430269, lng: 137.03964650243515 },
+  { name: "一ツ木駅", lat: 35.01380659631589, lng: 137.0254059487408 },
+  { name: "富士松駅", lat: 35.0294385080383, lng: 137.01682099543393 },
+  { name: "豊明駅", lat: 35.040882549510776, lng: 137.00836261240397 },
+  { name: "前後駅", lat: 35.05231966226537, lng: 136.995598354629 },
+  { name: "中京競馬場前駅", lat: 35.06127732683306, lng: 136.98152254959754 },
+  { name: "有松駅", lat: 35.06748360601862, lng: 136.97134336855171 },
+  { name: "左京山駅", lat: 35.067458079668015, lng: 136.97133823662998 },
+  { name: "鳴海駅", lat: 35.07843473847971, lng: 136.9507456372692 },
+  { name: "本星崎駅", lat: 35.086910761867934, lng: 136.9374200452981 },
+  { name: "本笠寺駅", lat: 35.09933921273592, lng: 136.93346649644948 },
+  { name: "桜駅", lat: 35.10630036744282, lng: 136.9346167049898 },
+  { name: "呼続駅", lat: 35.1143549739723, lng: 136.9305869289135 },
+  { name: "堀田駅", lat: 35.12013396388444, lng: 136.9197549996976 },
+  { name: "神宮前駅", lat: 35.125719425051514, lng: 136.91250199053744 },
+  { name: "金山駅", lat: 35.142811915632535, lng: 136.90118597682405 },
+  { name: "山王駅", lat: 35.152600955236856, lng: 136.8885397018134 },
+  { name: "名鉄名古屋駅", lat: 35.17036502060045, lng: 136.88428767949588 },
+  { name: "栄生駅", lat: 35.18339963525929, lng: 136.87355145820862 },
+  { name: "東枇杷島駅", lat: 35.189750687878714, lng: 136.87024488475785 },
+  { name: "西枇杷島駅", lat: 35.195062841143375, lng: 136.86549299909257 },
+  { name: "二ツ杁駅", lat: 35.19486064065193, lng: 136.85957860839156 },
+  { name: "新川橋駅", lat: 35.1957439113549, lng: 136.85191035094343 },
+  { name: "須ヶ口駅", lat: 35.19867036557675, lng: 136.84618795515172 },
+  { name: "丸の内駅", lat: 35.174008306328865, lng: 136.89680675254283 },
+  { name: "新清洲駅", lat: 35.21123277752584, lng: 136.83563355803008 },
+  { name: "大里駅", lat: 35.226212814492655, lng: 136.81835653659 },
+  { name: "奥田駅", lat: 35.2355152690392, lng: 136.8108151394045 },
+  { name: "国府宮駅", lat: 35.25366223534117, lng: 136.80291340647108 },
+  { name: "島氏永駅", lat: 35.27130776419317, lng: 136.80091312280416 },
+  { name: "妙興寺駅", lat: 35.28731187952675, lng: 136.798218579144 },
+  { name: "名鉄一宮駅", lat: 35.30166596951043, lng: 136.79703499621644 },
+  { name: "今伊勢駅", lat: 35.318185209955324, lng: 136.78931117884582 },
+  { name: "石刀駅", lat: 35.32632986643017, lng: 136.78535461169542 },
+  { name: "新木曽川駅", lat: 35.34273720039879, lng: 136.7794333149385 },
+  { name: "黒田駅", lat: 35.35064664281565, lng: 136.77744240938148 },
+  { name: "木曽川堤駅", lat: 35.36525226564715, lng: 136.77033085064554 },
+  { name: "笠松駅", lat: 35.37420160036604, lng: 136.7643676839017 },
+  { name: "岐南駅", lat: 35.389690094935446, lng: 136.76926345843248 },
+  { name: "茶所駅", lat: 35.4023589356843, lng: 136.7688290363146 },
+  { name: "加納駅", lat: 35.405140938668076, lng: 136.76655658705764 },
+  { name: "名鉄岐阜駅", lat: 35.40959672272171, lng: 136.75714667604456 },
+  { name: "新安城駅", lat: 34.98709306475588, lng: 137.08518414718486 },
+{ name: "北安城駅", lat: 34.96478825036819, lng: 137.09198492722388 },
+{ name: "南安城駅", lat: 34.951979396832165, lng: 137.0924599797348 },
+{ name: "碧海古井駅", lat: 34.93689652104654, lng: 137.090840764388 },
+{ name: "堀内公園駅", lat: 34.92750669448915, lng: 137.08976207788822 },
+{ name: "桜井駅", lat: 34.91797001091605, lng: 137.08822602360263 },
+{ name: "南桜井駅", lat: 34.90623069721641, lng: 137.07708035749258 },
+{ name: "米津駅", lat: 34.892908401534584, lng: 137.06093161226815 },
+{ name: "桜町前駅", lat: 34.880175673281926, lng: 137.06238422985447 },
+{ name: "西尾口駅", lat: 34.870509984185134, lng: 137.06249012021482 },
+{ name: "西尾駅", lat: 34.86380039212141, lng: 137.05774160301215 },
+{ name: "福地駅", lat: 34.84432447641963, lng: 137.04847017787523 },
+{ name: "上横須賀駅", lat: 34.829897354863824, lng: 137.07196015002867 },
+{ name: "吉良吉田駅", lat: 34.79403238404487, lng: 137.0710534932184 },
+{ name: "三河鳥羽駅", lat: 34.79322798771531, lng: 137.10496836622394 },
+{ name: "西幡豆駅", lat: 34.792432094598595, lng: 137.1211437932309 },
+{ name: "東幡豆駅", lat: 34.789582327840435, lng: 137.14569877237489 },
+{ name: "こどもの国駅", lat: 34.7887682388797, lng: 137.16288396807815 },
+{ name: "西浦駅", lat: 34.790087072414906, lng: 137.17865963553749 },
+{ name: "片原駅", lat: 34.79881862492501, lng: 137.18468757413476 },
+{ name: "三河鹿島駅", lat: 34.813308440960725, lng: 137.189730951564 },
+{ name: "蒲郡競艇場前駅", lat: 34.825593513761106, lng: 137.20219682657938 },
+{ name: "蒲郡駅", lat: 34.82288937364543, lng: 137.22627334110132 },
+{ name: "知立駅", lat: 35.00592243352234, lng: 137.03959361835518 },
+{ name: "重原駅", lat: 34.99509562568579, lng: 137.02407312020384 },
+{ name: "刈谷駅", lat: 34.99109317883324, lng: 137.00888805464905 },
+{ name: "刈谷市駅", lat: 34.984798950598616, lng: 136.9938331314778 },
+{ name: "小垣江駅", lat: 34.963769961675524, lng: 136.99540301333468 },
+{ name: "吉浜駅", lat: 34.94642957158757, lng: 136.98905836442788 },
+{ name: "三河高浜駅", lat: 34.9305247059775, lng: 136.99008682205798 },
+{ name: "高浜港駅", lat: 34.921123901489, lng: 136.98922759323284 },
+{ name: "北新川駅", lat: 34.90630641050556, lng: 136.99254837973723 },
+{ name: "新川町駅", lat: 34.89634340217784, lng: 136.98999007788316 },
+{ name: "碧南中央駅", lat: 34.88716395147377, lng: 136.98963515773957 },
+{ name: "碧南駅", lat: 34.87389758034796, lng: 136.9855572355579 },
+{ name: "名鉄名古屋駅", lat: 35.169622, lng: 136.883958 },
+{ name: "栄生駅", lat: 35.183412, lng: 136.873554 },
+{ name: "東枇杷島駅", lat: 35.189680, lng: 136.870315 },
+{ name: "下小田井駅", lat: 35.201903, lng: 136.870649 },
+{ name: "中小田井駅", lat: 35.214847, lng: 136.876950 },
+{ name: "上小田井駅", lat: 35.223724, lng: 136.876881 },
+{ name: "西春駅", lat: 35.244607, lng: 136.871238 },
+{ name: "徳重名古屋芸大駅", lat: 35.256153, lng: 136.873405 },
+{ name: "大山寺駅", lat: 35.263335, lng: 136.874692 },
+{ name: "岩倉駅", lat: 35.278292, lng: 136.873503 },
+{ name: "石仏駅", lat: 35.296165, lng: 136.871107 },
+{ name: "布袋駅", lat: 35.317940, lng: 136.872490 },
+{ name: "江南駅", lat: 35.335186, lng: 136.872095 },
+{ name: "栢森駅", lat: 35.344918, lng: 136.900420 },
+{ name: "扶桑駅", lat: 35.359687, lng: 136.916087 },
+{ name: "木津用水駅", lat: 35.366922, lng: 136.926116 },
+{ name: "犬山口駅", lat: 35.374165, lng: 136.939487 },
+{ name: "犬山駅", lat: 35.380250, lng: 136.945650 },
+{ name: "犬山遊園駅", lat: 35.390428, lng: 136.947130 },
+{ name: "新鵜沼駅", lat: 35.396383, lng: 136.944240 },
+{ name: "栄町駅", lat: 35.170739, lng: 136.908875 },
+{ name: "東大手駅", lat: 35.183726, lng: 136.908381 },
+{ name: "清水駅", lat: 35.187126, lng: 136.913711 },
+{ name: "尼ケ坂駅", lat: 35.187968, lng: 136.919277 },
+{ name: "森下駅", lat: 35.188272, lng: 136.929243 },
+{ name: "大曽根駅", lat: 35.191524, lng: 136.936853 },
+{ name: "矢田駅", lat: 35.193689, lng: 136.947823 },
+{ name: "守山自衛隊前駅", lat: 35.196228, lng: 136.957964 },
+{ name: "瓢箪山駅", lat: 35.197210, lng: 136.965067 },
+{ name: "小幡駅", lat: 35.200199, lng: 136.975858 },
+{ name: "喜多山駅", lat: 35.205191, lng: 136.987721 },
+{ name: "大森・金城学院前駅", lat: 35.206871, lng: 136.996412 },
+{ name: "印場駅", lat: 35.211098, lng: 137.011238 },
+{ name: "旭前駅", lat: 35.214221, lng: 137.019997 },
+{ name: "尾張旭駅", lat: 35.216729, lng: 137.036384 },
+{ name: "三郷駅", lat: 35.216352, lng: 137.052086 },
+{ name: "水野駅", lat: 35.224359, lng: 137.069888 },
+{ name: "新瀬戸駅", lat: 35.225641, lng: 137.077936 },
+{ name: "瀬戸市役所前駅", lat: 35.225159, lng: 137.084473 },
+{ name: "尾張瀬戸駅", lat: 35.225183, lng: 137.097306 },
+{ name: "三河知立駅", lat: 35.00560041170529, lng: 137.0551619183601 },
+{ name: "三河八橋駅", lat: 35.01073311599255, lng: 137.07716398397795 },
+{ name: "若林駅", lat: 35.026617538719215, lng: 137.0968326893095 },
+{ name: "竹村駅", lat: 35.040151823635696, lng: 137.11513070671333 },
+{ name: "土橋駅", lat: 35.058181444261145, lng: 137.12972190487756 },
+{ name: "上挙母駅", lat: 35.07221129037227, lng: 137.1549372778867 },
+{ name: "豊田市駅", lat: 35.08707361416158, lng: 137.15622355929824 },
+{ name: "梅坪駅", lat: 35.099954939261515, lng: 137.16239352522703 },
+{ name: "越戸駅", lat: 35.10768268847012, lng: 137.17988156623647 },
+{ name: "平戸橋駅", lat: 35.114725783254215, lng: 137.18466029138074 },
+{ name: "猿投駅", lat: 35.12255638619787, lng: 137.1787326355515 },
+{ name: "鵜沼宿駅", lat: 35.400013, lng: 136.932580 },
+{ name: "羽場駅", lat: 35.401231, lng: 136.921690 },
+{ name: "苧ヶ瀬駅", lat: 35.403439, lng: 136.911986 },
+{ name: "名電各務原駅", lat: 35.402846, lng: 136.901439 },
+{ name: "二十軒駅", lat: 35.400144, lng: 136.889195 },
+{ name: "三柿野駅", lat: 35.400278, lng: 136.875470 },
+{ name: "六軒駅", lat: 35.400972, lng: 136.862049 },
+{ name: "各務原市役所前駅", lat: 35.400883, lng: 136.847184 },
+{ name: "市民公園前駅", lat: 35.400632, lng: 136.841838 },
+{ name: "新那加駅", lat: 35.400133, lng: 136.833841 },
+{ name: "新加納駅", lat: 35.399362, lng: 136.824404 },
+{ name: "高田橋駅", lat: 35.398494, lng: 136.811919 },
+{ name: "手力駅", lat: 35.398264, lng: 136.804689 },
+{ name: "切通駅", lat: 35.400074, lng: 136.796055 },
+{ name: "細畑駅", lat: 35.401662, lng: 136.785262 },
+{ name: "田神駅", lat: 35.411351, lng: 136.772149 },
+{ name: "名鉄岐阜駅", lat: 35.411709, lng: 136.759821 },
+{ name: "上豊田駅", lat: 35.11657718396344, lng: 137.1546158643943 },
+{ name: "浄水駅", lat: 35.12125813472798, lng: 137.13745733370072 },
+{ name: "三好ケ丘駅", lat: 35.12690863853301, lng: 137.11117444902976 },
+{ name: "黒崎駅", lat: 35.127692529410666, lng: 137.09131910876334 },
+{ name: "米野木駅", lat: 35.12389093629811, lng: 137.0670430085792 },
+{ name: "日清駅", lat: 35.11845013529704, lng: 137.0490711175508 },
+{ name: "赤池駅", lat: 35.12119900930031, lng: 137.01830427203097 },
+{ name: "羽黒駅", lat: 35.351371, lng: 136.952528 },
+{ name: "楽田駅", lat: 35.330882, lng: 136.950088 },
+{ name: "田県神社前駅", lat: 35.317772, lng: 136.943811 },
+{ name: "味岡駅", lat: 35.309298, lng: 136.940398 },
+{ name: "小牧原駅", lat: 35.300121, lng: 136.935857 },
+{ name: "小牧駅", lat: 35.289186, lng: 136.928119 },
+{ name: "小牧口駅", lat: 35.281917, lng: 136.927548 },
+{ name: "間内駅", lat: 35.281917, lng: 136.927548 },
+{ name: "牛山駅", lat: 35.264253, lng: 136.931276 },
+{ name: "春日井駅", lat: 35.250335, lng: 136.936240 },
+{ name: "味美駅", lat: 35.235202, lng: 136.937140 },
+{ name: "味鋺駅", lat: 35.222642, lng: 136.936233 },
+{ name: "上飯田駅", lat: 35.203853, lng: 136.929648 },
+{ name: "富岡前駅", lat: 35.379586, lng: 136.962275 },
+{ name: "善師野駅", lat: 35.389516, lng: 136.979769 },
+{ name: "西可児駅", lat: 35.404707, lng: 137.010884 },
+{ name: "可児川駅", lat: 35.418514, lng: 137.018191 },
+{ name: "日本ライン今渡駅", lat: 35.432355, lng: 137.036546 },
+{ name: "新可児駅", lat: 35.422547, lng: 137.055514 },
+{ name: "西笠松駅", lat: 35.369070, lng: 136.757898 },
+  { name: "柳津駅", lat: 35.365125, lng: 136.739523 },
+  { name: "南宿駅", lat: 35.347849, lng: 136.728549 },
+  { name: "須加駅", lat: 35.339786, lng: 136.726546 },
+  { name: "不破一色駅", lat: 35.332720, lng: 136.721678 },
+  { name: "竹鼻駅", lat: 35.326612, lng: 136.706210 },
+  { name: "羽島市役所前駅", lat: 35.321669, lng: 136.699842 },
+  { name: "江吉良駅", lat: 35.315583, lng: 136.699676 },
+  { name: "新羽島駅", lat: 35.315710, lng: 136.686452 }
+  ];
+
+  const map = L.map('map').setView([35, 137], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  let userMarker;
+  let routeLine;
+  let markers = [];
+  let userPos = null;
+
+  function calculateDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function findNearestStation(lat, lng) {
+    let nearest = stations[0];
+    let minDist = calculateDistance(lat, lng, nearest.lat, nearest.lng);
+    for (let i = 1; i < stations.length; i++) {
+      const s = stations[i];
+      const dist = calculateDistance(lat, lng, s.lat, s.lng);
+      if (dist < minDist) {
+        nearest = s;
+        minDist = dist;
+      }
+    }
+    return nearest;
+  }
+
+  function getRouteOrder(startLat, startLng, spots) {
+    const remaining = spots.slice();
+    const order = [];
+    let currentLat = startLat;
+    let currentLng = startLng;
+
+    while (remaining.length > 0) {
+      let nearestIndex = 0;
+      let nearestDist = calculateDistance(currentLat, currentLng, remaining[0].lat, remaining[0].lng);
+      for (let i = 1; i < remaining.length; i++) {
+        const dist = calculateDistance(currentLat, currentLng, remaining[i].lat, remaining[i].lng);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestIndex = i;
+        }
+      }
+      const nextSpot = remaining.splice(nearestIndex, 1)[0];
+      order.push(nextSpot);
+      currentLat = nextSpot.lat;
+      currentLng = nextSpot.lng;
+    }
+    return order;
+  }
+
+  function drawRoute(coords) {
+    if (routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline(coords, { color: 'blue', weight: 5 }).addTo(map);
+    map.fitBounds(routeLine.getBounds());
+  }
+
+  function clearMarkers() {
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+  }
+
+  function fetchRoute(waypoints) {
+    if (waypoints.length < 2) {
+      alert("ルートに必要なスポットが選択されていません。");
+      return;
+    }
+    const coords = waypoints.map(p => [p.lng, p.lat]);
+
+    fetch('https://api.openrouteservice.org/v2/directions/foot-walking/geojson', {
+      method: 'POST',
+      headers: {
+        'Authorization': '5b3ce3597851110001cf62487338421d75c3437b97c6fe3ace881105', // ←自分のAPIキーに変更すること
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ coordinates: coords })
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('APIエラー: ' + res.status);
+        return res.json();
+      })
+      .then(data => {
+        const geojson = data.features[0].geometry;
+        const latlngs = geojson.coordinates.map(c => [c[1], c[0]]);
+        drawRoute(latlngs);
+      })
+      .catch(err => {
+        alert('ルート取得エラー: ' + err.message);
+        console.error(err);
+      });
+  }
+
+  // チェックボックスなしで、常に「シキザクラ」カテゴリを選択状態にする
+  function getSelectedCategories() {
+    return ["シキザクラ"];
+  }
+
+  function updateMap() {
+    if (!userPos) {
+      alert('現在地が取得できていません。');
+      return;
+    }
+
+    const selectedCategories = getSelectedCategories();
+    if (selectedCategories.length === 0) {
+      alert('カテゴリを1つ以上選択してください。');
+      return;
+    }
+
+    const filteredSpots = spots.filter(s => selectedCategories.includes(s.category));
+    if (filteredSpots.length === 0) {
+      alert('選択されたカテゴリのスポットがありません。');
+      return;
+    }
+
+    clearMarkers();
+
+    const startStation = findNearestStation(userPos.lat, userPos.lng);
+    const spotWithStations = filteredSpots.map(spot => {
+      const nearestStation = findNearestStation(spot.lat, spot.lng);
+      return [nearestStation, spot];
+    }).flat();
+
+    const orderedPoints = getRouteOrder(userPos.lat, userPos.lng, [startStation, ...spotWithStations]);
+
+    orderedPoints.forEach(p => {
+      const isStation = stations.some(st => st.lat === p.lat && st.lng === p.lng);
+      const options = isStation ? { icon: stationIcon } : {}; // ← 修正ポイント
+
+      const marker = L.marker([p.lat, p.lng], options).addTo(map).bindPopup(p.name || "地点");
+      markers.push(marker);
+    });
+
+    fetchRoute([userPos, ...orderedPoints]);
+  }
+
+  function init() {
+    if (!navigator.geolocation) {
+      alert('現在地が取得できません');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      userPos = { lat, lng };
+
+      if (userMarker) {
+        userMarker.setLatLng([lat, lng]);
+      } else {
+        userMarker = L.marker([lat, lng], { icon: redIcon }).addTo(map).bindPopup('現在地').openPopup();
+      }
+      map.setView([lat, lng], 10);
+
+      updateMap();
+    }, () => alert('現在地の取得に失敗しました'));
+  }
+
+  // ボタンは無くなったので、このイベントリスナーは削除しています
+
+  init();
+</script>
+</body>
+</html>
